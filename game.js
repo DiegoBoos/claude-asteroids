@@ -9,14 +9,6 @@ const H = 600;
 const keys = {};
 const justPressed = {};
 
-window.addEventListener('keydown', e => {
-  justPressed[e.code] = !keys[e.code];
-  keys[e.code] = true;
-  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code))
-    e.preventDefault();
-});
-window.addEventListener('keyup', e => { keys[e.code] = false; });
-
 function pressed(code) {
   const val = justPressed[code];
   justPressed[code] = false;
@@ -68,6 +60,7 @@ class Asteroid {
     this.y    = y;
     this.size = size;
     this.radius = RADII[size];
+    this.points = POINTS[size];
     this.dead = false;
 
     const angle = rand(0, Math.PI * 2);
@@ -106,6 +99,46 @@ class Asteroid {
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rot);
     ctx.strokeStyle = '#fff';
+    ctx.lineWidth   = 1.5;
+    ctx.lineJoin    = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.verts[0][0], this.verts[0][1]);
+    for (let i = 1; i < this.verts.length; i++)
+      ctx.lineTo(this.verts[i][0], this.verts[i][1]);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// Silueta cóncava fija (con muesca) para el asteroide afilado, normalizada a radio 1
+const SHARP_VERTS = [
+  [-15, -140], [70, -110], [60, -25], [130, -5], [110, 75],
+  [50, 75], [5, 145], [-90, 100], [-145, 5], [-125, -70],
+].map(([x, y]) => [x / 150, y / 150]);
+
+// Variante de asteroide grande con forma cóncava puntiaguda: vale más puntos
+// y se rompe en tres fragmentos en vez de dos.
+class SharpAsteroid extends Asteroid {
+  constructor(x, y) {
+    super(x, y, 3);
+    this.points = POINTS[3] * 2;
+    this.verts = SHARP_VERTS.map(([nx, ny]) => [nx * this.radius, ny * this.radius]);
+  }
+
+  split() {
+    return [
+      new Asteroid(this.x, this.y, 2),
+      new Asteroid(this.x, this.y, 2),
+      new Asteroid(this.x, this.y, 2),
+    ];
+  }
+
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rot);
+    ctx.strokeStyle = '#ff5533';
     ctx.lineWidth   = 1.5;
     ctx.lineJoin    = 'round';
     ctx.beginPath();
@@ -249,7 +282,7 @@ function spawnAsteroids(count) {
       x = rand(0, W);
       y = rand(0, H);
     } while (Math.hypot(x - W / 2, y - H / 2) < SAFE_DIST);
-    asteroids.push(new Asteroid(x, y, 3));
+    asteroids.push(Math.random() < 0.25 ? new SharpAsteroid(x, y) : new Asteroid(x, y, 3));
   }
 }
 
@@ -327,7 +360,7 @@ function update(dt) {
       if (!a.dead && !b.dead && dist(b, a) < a.radius) {
         b.dead = true;
         a.dead = true;
-        score += POINTS[a.size];
+        score += a.points;
         explode(a.x, a.y, a.size * 5);
         newAsteroids.push(...a.split());
       }
